@@ -1,0 +1,14 @@
+{
+  "name": "open-local-for-google-drive",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "description": "Chrome extension + native messaging host to open the local Google Drive folder for the Drive page you are viewing",
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "icons": "node scripts/generate-icons.mjs"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Open Local for Google Drive",
+  "version": "1.0.0",
+  "description": "表示中のGoogle Driveフォルダを、ローカルのGoogle Drive for Desktopフォルダとしてエクスプローラーで開きます",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApgPzoQUnfAOJ8rDVeG34MFXwSBmPQ/fsiO80PKWrJtEx1fDeJ0q+tj/dw3iWJKgtNj3qvimahTsopg5aGup8vswYx6TnoSDK9ZGPNthmABHcyaaudJ4TO3h1HiuJRv/sKjiJ2k2ptHtYeozWuTNw+HH4Ld0lRpYKjyNu1m9oiGdkz7pDOqRavITr43shtmLu8sevK3RzbftkS/cW2wrRlrsWxMOn+btZaa9OM6FC6xClD++8N3NghaGKsJ/zyIG/W/p4gHiFHH9Zr7DKBJ0Lqgq+dlSLOGIHKi6p0aSICFYNnpZUKW5s0sTU7fdGLdPUhY2Ai04MsMcTJGJZzM9GEQIDAQAB",
+  "action": {
+    "default_title": "ローカルフォルダで開く",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://drive.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["nativeMessaging", "activeTab", "scripting", "notifications"],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Ctrl+Shift+9" },
+      "description": "ローカルフォルダで開く"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
