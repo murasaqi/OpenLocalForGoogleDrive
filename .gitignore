@@ -7,3 +7,6 @@ tests/local-ids.json
 
 node_modules/
 *.log
+
+# Local tooling state (serena MCP server)
+.serena/

@@ -25,7 +25,7 @@ explorer.exe "G:\My Drive\..."   (ファイル時は /select, でハイライト
 ## 必要環境
 
 - Windows + Google Drive for Desktop(ストリーミングでドライブレターにマウントされていること)
-- Node.js 22.5以降(`node:sqlite`を使用。動作確認はNode 24)
+- Node.js 24以降(`node:sqlite`を使用。無い場合は`install.ps1`がwingetで自動インストールを試みます)
 - Google Chrome
 
 ## セットアップ
@@ -37,13 +37,16 @@ explorer.exe "G:\My Drive\..."   (ファイル時は /select, でハイライト
    4. 拡張IDが `akmpfhnifeafnahlnfkhacjgcbeekgpo` であることを確認
       (manifest.jsonの`key`で固定しているため、通常はこのIDになります)
 
-2. **ネイティブホストを登録**(管理者権限不要)
+2. **ネイティブホストを登録**
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File scripts\install.ps1
    ```
 
-   拡張IDが異なる場合は `-ExtensionId <実際のID>` を付けて実行してください。
+   - ホストの登録自体は管理者権限不要です(現在のユーザーのみに登録)
+   - Node.js 24以降が見つからない場合はwingetで自動インストールを試みます
+     (このステップのみUACの承認が必要。自動インストールを避ける場合は `-SkipNodeInstall` を指定)
+   - 拡張IDが異なる場合は `-ExtensionId <実際のID>` を付けて実行してください。
 
 3. Chromeを再起動(または拡張機能をリロード)
 
