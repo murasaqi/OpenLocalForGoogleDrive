@@ -22,7 +22,9 @@ export const normalizeMountValue = (value) => {
 // Google Drive for Desktop stores per-account preferences (including a custom
 // mount point) as a JSON string in this registry value. The entry key is the
 // account ID, matching the %LOCALAPPDATA%\Google\DriveFS\<key> directory.
-// An empty value means the default mount point is used.
+// An empty value means the default mount point is used; which drive letter
+// the default resolves to is not recorded here, so such accounts must be
+// resolved by probing every detected mount root.
 const accountMountPrefs = () => {
   try {
     const out = execFileSync(
@@ -46,18 +48,35 @@ const accountMountPrefs = () => {
   }
 };
 
-export const detectMountRoot = () => {
+// All roots that currently hold Drive content, explicitly configured mount
+// points first. With multiple accounts each mounted on its own letter, every
+// entry here is a valid root for some account.
+export const detectMountRoots = () => {
   const candidates = [
     ...accountMountPrefs().values(),
     ...DRIVE_LETTERS.map((letter) => `${letter}:\\`),
   ];
-  return candidates.find(hasDriveContent) ?? null;
+  return [...new Set(candidates)].filter(hasDriveContent);
 };
 
-// Prefers the mount point configured for the given account so items from a
-// secondary account resolve against that account's drive letter.
-export const mountRootForAccount = (accountId) => {
-  const preferred = accountMountPrefs().get(accountId);
-  if (preferred && hasDriveContent(preferred)) return preferred;
-  return detectMountRoot();
+export const detectMountRoot = () => detectMountRoots()[0] ?? null;
+
+// Roots to try for the given account, most likely first: an explicitly
+// configured mount point wins, but the others stay as fallbacks so accounts
+// on the default mount (absent from the prefs) resolve by filesystem
+// existence instead of guessing a single drive letter. For default-mount
+// accounts, roots explicitly claimed by other accounts go last so a
+// same-named path on someone else's mount doesn't shadow the right one.
+export const mountRootsForAccount = (accountId, options = {}) => {
+  const prefs = options.prefs ?? accountMountPrefs();
+  const roots = options.roots ?? detectMountRoots();
+  const preferred = prefs.get(accountId);
+  if (preferred && roots.includes(preferred)) {
+    return [preferred, ...roots.filter((root) => root !== preferred)];
+  }
+  const claimed = new Set(prefs.values());
+  return [
+    ...roots.filter((root) => !claimed.has(root)),
+    ...roots.filter((root) => claimed.has(root)),
+  ];
 };

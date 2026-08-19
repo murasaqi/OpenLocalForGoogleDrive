@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 
-import { detectMountRoot, mountRootForAccount } from "./mount.mjs";
+import { detectMountRoot, detectMountRoots, mountRootsForAccount } from "./mount.mjs";
 
 const CLOUD_ID_PATTERN = /^[-\w]{5,120}$/;
 const MAX_PARENT_DEPTH = 100;
@@ -92,11 +92,17 @@ const candidatePaths = (parts, sharedDriveHint, mountRoot) => {
     : [asMyDrive, asSharedDrive, asLiteral];
 };
 
+// The same cloud ID can exist in several account DBs (e.g. a shared drive
+// both accounts are members of) and each account may be mounted on its own
+// drive letter, so keep scanning DBs and mount roots until a candidate path
+// actually exists. The first miss is kept so a not-yet-synced item still
+// reports the most likely path it was expected at.
 export const resolveItemPath = (cloudId, options = {}) => {
   if (typeof cloudId !== "string" || !CLOUD_ID_PATTERN.test(cloudId)) return null;
 
   const dbPaths =
     options.dbPaths ?? listAccountDbPaths(options.driveFsRoot ?? defaultDriveFsRoot());
+  let firstMiss = null;
   for (const dbPath of dbPaths) {
     let found;
     try {
@@ -108,19 +114,25 @@ export const resolveItemPath = (cloudId, options = {}) => {
     if (!found.parts.every(isSafeSegment)) continue;
 
     const accountId = path.basename(path.dirname(dbPath));
-    const mountRoot = options.mountRoot ?? mountRootForAccount(accountId);
-    if (!mountRoot) continue;
+    const mountRoots =
+      options.mountRoots ??
+      (options.mountRoot ? [options.mountRoot] : mountRootsForAccount(accountId));
 
-    const candidates = candidatePaths(found.parts, found.sharedDriveHint, mountRoot);
-    const existing = candidates.find((candidate) => existsSync(candidate));
-    return {
-      path: existing ?? candidates[0],
-      exists: Boolean(existing),
-      isFolder: found.isFolder,
-      mountRoot,
-    };
+    for (const mountRoot of mountRoots) {
+      const candidates = candidatePaths(found.parts, found.sharedDriveHint, mountRoot);
+      const existing = candidates.find((candidate) => existsSync(candidate));
+      if (existing) {
+        return { path: existing, exists: true, isFolder: found.isFolder, mountRoot };
+      }
+      firstMiss ??= {
+        path: candidates[0],
+        exists: false,
+        isFolder: found.isFolder,
+        mountRoot,
+      };
+    }
   }
-  return null;
+  return firstMiss;
 };
 
 // Fallback used when the metadata DB cannot resolve an ID (e.g. schema
@@ -131,18 +143,21 @@ export const resolveItemPath = (cloudId, options = {}) => {
 export const resolveBreadcrumbPath = (breadcrumbs, options = {}) => {
   if (!Array.isArray(breadcrumbs) || breadcrumbs.length === 0) return null;
   if (!breadcrumbs.every(isSafeSegment)) return null;
-  const mountRoot = options.mountRoot ?? detectMountRoot();
-  if (!mountRoot) return null;
+  const mountRoots =
+    options.mountRoots ?? (options.mountRoot ? [options.mountRoot] : detectMountRoots());
 
-  const [root, ...rest] = breadcrumbs;
-  const base = MY_DRIVE_ROOT_NAMES.has(root)
-    ? path.join(mountRoot, "My Drive")
-    : path.join(mountRoot, "Shared drives", root);
-  if (!existsSync(base)) return null;
+  for (const mountRoot of mountRoots) {
+    const [root, ...rest] = breadcrumbs;
+    const base = MY_DRIVE_ROOT_NAMES.has(root)
+      ? path.join(mountRoot, "My Drive")
+      : path.join(mountRoot, "Shared drives", root);
+    if (!existsSync(base)) continue;
 
-  const fullPath = path.join(base, ...rest);
-  if (!existsSync(fullPath)) return null;
-  return { path: fullPath, exists: true, isFolder: true, mountRoot };
+    const fullPath = path.join(base, ...rest);
+    if (!existsSync(fullPath)) continue;
+    return { path: fullPath, exists: true, isFolder: true, mountRoot };
+  }
+  return null;
 };
 
 export const resolveSpecialPath = (target, options = {}) => {
