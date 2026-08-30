@@ -23,13 +23,16 @@ if (!window.__openLocalGdriveLoaded) {
     const navs = Array.from(document.querySelectorAll('nav[role="navigation"]'));
     const breadcrumbNav = navs.find((nav) => nav.querySelector('[role="listitem"]'));
     if (!breadcrumbNav) return [];
+    // When the path is collapsed, its expand button ("パスを表示") is a
+    // listitem too, with the same role/aria attributes as the current-folder
+    // button. It is icon-only, so drop controls without visible text rather
+    // than matching locale-dependent labels. Ancestors hidden behind it are
+    // still missing from the trail; the host rejects such partial trails
+    // through its root/existence checks.
     return Array.from(breadcrumbNav.querySelectorAll('[role="listitem"]'))
-      .map((item) =>
-        item
-          .querySelector('[role="link"],[role="button"]')
-          ?.getAttribute("aria-label")
-          ?.trim()
-      )
+      .map((item) => item.querySelector('[role="link"],[role="button"]'))
+      .filter((control) => control && control.textContent.trim().length > 0)
+      .map((control) => (control.getAttribute("aria-label") ?? control.textContent).trim())
       .filter((label) => Boolean(label));
   };
 

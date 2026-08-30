@@ -12,7 +12,12 @@ import {
   resolveItemPath,
   resolveSpecialPath,
 } from "../host/lib/resolver.mjs";
-import { createFixture, FIXTURE_IDS } from "./fixtures.mjs";
+import {
+  createFixture,
+  createMultiAccountFixture,
+  FIXTURE_IDS,
+  MULTI_IDS,
+} from "./fixtures.mjs";
 
 // ---------------------------------------------------------------------------
 // Fixture-based unit tests (machine independent)
@@ -99,6 +104,47 @@ test("fixture: resolveSpecialPath maps targets and rejects prototype keys", () =
   assert.equal(resolveSpecialPath("constructor", opts), null);
   assert.equal(resolveSpecialPath("__proto__", opts), null);
   assert.equal(resolveSpecialPath(null, opts), null);
+});
+
+// ---------------------------------------------------------------------------
+// Multi-account fixtures: two accounts, each on its own mount root.
+// ---------------------------------------------------------------------------
+
+const multi = createMultiAccountFixture();
+const multiOpts = {
+  driveFsRoot: multi.driveFsRoot,
+  mountRoots: [multi.mountA, multi.mountB],
+};
+after(() => multi.cleanup());
+
+test("multi-account: item resolves on a later mount root", () => {
+  // Regression for the multi-account bug: another account's root (mountA)
+  // comes first, but the item only exists under mountB.
+  const result = resolveItemPath(MULTI_IDS.reports, multiOpts);
+  assert.equal(result.path, path.join(multi.mountB, "Shared drives", "TeamY", "Reports"));
+  assert.equal(result.exists, true);
+  assert.equal(result.mountRoot, multi.mountB);
+});
+
+test("multi-account: same cloud ID across DBs resolves where it exists", () => {
+  // Account 111111's DB answers first with an unsynced chain; the scan must
+  // continue to account 222222 whose chain is on disk.
+  const result = resolveItemPath(MULTI_IDS.shadow, multiOpts);
+  assert.equal(result.path, path.join(multi.mountB, "Shared drives", "TeamY", "Shadow"));
+  assert.equal(result.exists, true);
+});
+
+test("multi-account: full miss keeps the first candidate for error display", () => {
+  const result = resolveItemPath(MULTI_IDS.missing, multiOpts);
+  assert.equal(result.exists, false);
+  assert.equal(result.path, path.join(multi.mountA, "My Drive", "Nowhere"));
+  assert.equal(result.mountRoot, multi.mountA);
+});
+
+test("multi-account: breadcrumb fallback scans all mount roots", () => {
+  const result = resolveBreadcrumbPath(["TeamY", "Reports"], multiOpts);
+  assert.equal(result.path, path.join(multi.mountB, "Shared drives", "TeamY", "Reports"));
+  assert.equal(resolveBreadcrumbPath(["共有アイテム"], multiOpts), null);
 });
 
 // ---------------------------------------------------------------------------
