@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Open Local for Google Drive",
   "version": "1.0.0",
-  "description": "表示中のGoogle Driveフォルダを、ローカルのGoogle Drive for Desktopフォルダとしてエクスプローラーで開きます",
+  "description": "表示中のGoogle Driveフォルダを、ローカルのGoogle Drive for Desktopフォルダとしてエクスプローラー/Finderで開きます",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApgPzoQUnfAOJ8rDVeG34MFXwSBmPQ/fsiO80PKWrJtEx1fDeJ0q+tj/dw3iWJKgtNj3qvimahTsopg5aGup8vswYx6TnoSDK9ZGPNthmABHcyaaudJ4TO3h1HiuJRv/sKjiJ2k2ptHtYeozWuTNw+HH4Ld0lRpYKjyNu1m9oiGdkz7pDOqRavITr43shtmLu8sevK3RzbftkS/cW2wrRlrsWxMOn+btZaa9OM6FC6xClD++8N3NghaGKsJ/zyIG/W/p4gHiFHH9Zr7DKBJ0Lqgq+dlSLOGIHKi6p0aSICFYNnpZUKW5s0sTU7fdGLdPUhY2Ai04MsMcTJGJZzM9GEQIDAQAB",
   "action": {
     "default_title": "ローカルフォルダで開く",
@@ -27,7 +27,7 @@
   "permissions": ["nativeMessaging", "activeTab", "scripting", "notifications"],
   "commands": {
     "_execute_action": {
-      "suggested_key": { "default": "Ctrl+Shift+9" },
+      "suggested_key": { "default": "Ctrl+Shift+9", "mac": "Command+Shift+9" },
       "description": "ローカルフォルダで開く"
     }
   },

@@ -16,6 +16,13 @@ export const FIXTURE_IDS = {
   unsafeTitle: "evilid00001",
 };
 
+export const LOCALIZED_IDS = {
+  myDriveRoot: "lrootid0001",
+  folderA: "lfolderA001",
+  teamRoot: "lteamroot01",
+  teamDocs: "ldocsid0001",
+};
+
 export const MULTI_IDS = {
   reports: "reportsid01",
   shadow: "shadowid001",
@@ -131,4 +138,51 @@ export const createMultiAccountFixture = () => {
 
   const cleanup = () => rmSync(base, { recursive: true, force: true });
   return { driveFsRoot, mountA, mountB, cleanup };
+};
+
+// Mirrors a real macOS mount under a non-English OS locale (verified against
+// this repo's own dev machine, ja_JP): the top-level folder names on disk
+// are localized (マイドライブ / 共有ドライブ) instead of the fixed English
+// names Windows always uses. The My Drive root's DB title matches the real
+// folder name exactly; the Shared drives container has no DB entry at all.
+export const createLocalizedFixture = () => {
+  const base = mkdtempSync(path.join(tmpdir(), "olg-localized-"));
+
+  const mountRoot = path.join(base, "mount") + path.sep;
+  mkdirSync(path.join(mountRoot, "マイドライブ", "FolderA"), { recursive: true });
+  mkdirSync(path.join(mountRoot, "共有ドライブ", "TeamX", "Docs"), { recursive: true });
+
+  const driveFsRoot = path.join(base, "drivefs");
+  const accountDir = path.join(driveFsRoot, "999999");
+  mkdirSync(accountDir, { recursive: true });
+
+  const db = new DatabaseSync(path.join(accountDir, "metadata_sqlite_db"));
+  db.exec(`
+    CREATE TABLE items (
+      stable_id INTEGER PRIMARY KEY,
+      id TEXT,
+      local_title TEXT,
+      is_folder INTEGER,
+      trashed INTEGER,
+      is_tombstone INTEGER,
+      team_drive_stable_id INTEGER
+    );
+    CREATE TABLE stable_parents (
+      item_stable_id INTEGER,
+      parent_stable_id INTEGER
+    );
+  `);
+  const insertItem = db.prepare("INSERT INTO items VALUES (?, ?, ?, ?, ?, ?, ?)");
+  const insertParent = db.prepare("INSERT INTO stable_parents VALUES (?, ?)");
+
+  insertItem.run(1, LOCALIZED_IDS.myDriveRoot, "マイドライブ", 1, 0, 0, null);
+  insertItem.run(2, LOCALIZED_IDS.folderA, "FolderA", 1, 0, 0, null);
+  insertItem.run(10, LOCALIZED_IDS.teamRoot, "TeamX", 1, 0, 0, 10);
+  insertItem.run(11, LOCALIZED_IDS.teamDocs, "Docs", 1, 0, 0, 10);
+  insertParent.run(2, 1);
+  insertParent.run(11, 10);
+  db.close();
+
+  const cleanup = () => rmSync(base, { recursive: true, force: true });
+  return { driveFsRoot, mountRoot, cleanup };
 };

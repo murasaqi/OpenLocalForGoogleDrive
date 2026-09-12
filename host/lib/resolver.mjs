@@ -1,8 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
 import { existsSync, readdirSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 
 import { detectMountRoot, detectMountRoots, mountRootsForAccount } from "./mount.mjs";
+import { myDriveDir, sharedDrivesDir } from "./special-folders.mjs";
 
 const CLOUD_ID_PATTERN = /^[-\w]{5,120}$/;
 const MAX_PARENT_DEPTH = 100;
@@ -18,6 +20,9 @@ const isSafeSegment = (segment) =>
   segment !== "..";
 
 export const defaultDriveFsRoot = () => {
+  if (process.platform === "darwin") {
+    return path.join(homedir(), "Library", "Application Support", "Google", "DriveFS");
+  }
   if (!process.env.LOCALAPPDATA) return null;
   return path.join(process.env.LOCALAPPDATA, "Google", "DriveFS");
 };
@@ -79,13 +84,15 @@ const lookupInDb = (dbPath, cloudId) => {
   }
 };
 
-// The DB stores the localized root title (e.g. マイドライブ) while the actual
-// folder on the mount is always "My Drive" / "Shared drives". Build candidate
-// paths for both interpretations and let filesystem existence decide.
-const candidatePaths = (parts, sharedDriveHint, mountRoot) => {
+// The DB stores the localized root title (e.g. マイドライブ), which on
+// Windows is discarded in favor of the fixed English mount folder names; on
+// macOS the mount folder names are themselves localized (see
+// special-folders.mjs). Build candidate paths for both interpretations and
+// let filesystem existence decide.
+const candidatePaths = (parts, sharedDriveHint, mountRoot, options = {}) => {
   const [root, ...rest] = parts;
-  const asSharedDrive = path.join(mountRoot, "Shared drives", root, ...rest);
-  const asMyDrive = path.join(mountRoot, "My Drive", ...rest);
+  const asSharedDrive = path.join(sharedDrivesDir(mountRoot, options), root, ...rest);
+  const asMyDrive = path.join(myDriveDir(mountRoot, options), ...rest);
   const asLiteral = path.join(mountRoot, ...parts);
   return sharedDriveHint && !MY_DRIVE_ROOT_NAMES.has(root)
     ? [asSharedDrive, asMyDrive, asLiteral]
@@ -119,7 +126,7 @@ export const resolveItemPath = (cloudId, options = {}) => {
       (options.mountRoot ? [options.mountRoot] : mountRootsForAccount(accountId));
 
     for (const mountRoot of mountRoots) {
-      const candidates = candidatePaths(found.parts, found.sharedDriveHint, mountRoot);
+      const candidates = candidatePaths(found.parts, found.sharedDriveHint, mountRoot, options);
       const existing = candidates.find((candidate) => existsSync(candidate));
       if (existing) {
         return { path: existing, exists: true, isFolder: found.isFolder, mountRoot };
@@ -149,8 +156,8 @@ export const resolveBreadcrumbPath = (breadcrumbs, options = {}) => {
   for (const mountRoot of mountRoots) {
     const [root, ...rest] = breadcrumbs;
     const base = MY_DRIVE_ROOT_NAMES.has(root)
-      ? path.join(mountRoot, "My Drive")
-      : path.join(mountRoot, "Shared drives", root);
+      ? myDriveDir(mountRoot, options)
+      : path.join(sharedDrivesDir(mountRoot, options), root);
     if (!existsSync(base)) continue;
 
     const fullPath = path.join(base, ...rest);
@@ -161,10 +168,10 @@ export const resolveBreadcrumbPath = (breadcrumbs, options = {}) => {
 };
 
 export const resolveSpecialPath = (target, options = {}) => {
-  const specialDirs = { myDrive: "My Drive", sharedDrives: "Shared drives" };
-  if (typeof target !== "string" || !Object.hasOwn(specialDirs, target)) return null;
+  if (target !== "myDrive" && target !== "sharedDrives") return null;
   const mountRoot = options.mountRoot ?? detectMountRoot();
   if (!mountRoot) return null;
-  const specialPath = path.join(mountRoot, specialDirs[target]);
+  const specialPath =
+    target === "myDrive" ? myDriveDir(mountRoot, options) : sharedDrivesDir(mountRoot, options);
   return { path: specialPath, exists: existsSync(specialPath), isFolder: true, mountRoot };
 };

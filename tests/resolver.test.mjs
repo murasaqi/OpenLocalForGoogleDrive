@@ -12,6 +12,7 @@ import {
   resolveItemPath,
   resolveSpecialPath,
 } from "../host/lib/resolver.mjs";
+import { myDriveDir, sharedDrivesDir } from "../host/lib/special-folders.mjs";
 import {
   createFixture,
   createMultiAccountFixture,
@@ -167,12 +168,12 @@ const driveFsAvailable = listAccountDbPaths(defaultDriveFsRoot()).length > 0;
 const liveSkip =
   driveFsAvailable && localIds ? false : "requires DriveFS install + tests/local-ids.json";
 
-test("live: detectMountRoot finds a drive containing My Drive", { skip: liveSkip }, () => {
+test("live: detectMountRoot finds a mount containing My Drive", { skip: liveSkip }, () => {
   const mount = detectMountRoot();
   assert.ok(mount, "mount root should be detected");
-  assert.match(mount, /^[A-Z]:\\$/);
+  assert.match(mount, process.platform === "darwin" ? /\/GoogleDrive-[^/]+\/$/ : /^[A-Z]:\\$/);
   assert.ok(
-    existsSync(path.join(mount, "My Drive")) || existsSync(path.join(mount, "Shared drives")),
+    existsSync(myDriveDir(mount)) || existsSync(sharedDrivesDir(mount)),
     `expected My Drive or Shared drives under ${mount}`
   );
 });

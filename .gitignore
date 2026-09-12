@@ -1,5 +1,6 @@
 # Generated at install time (contains machine-specific absolute paths)
 host/jp.andent.open_local_gdrive.json
+host/open-local-host.sh
 
 # Machine-specific integration test fixtures (real Drive IDs are
 # capability tokens and must not be committed)
