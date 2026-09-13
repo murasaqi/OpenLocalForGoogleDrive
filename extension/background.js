@@ -11,8 +11,10 @@ const ERROR_MESSAGES = {
     "Google Drive for Desktopのデータが見つかりません。インストール・起動されているか確認してください",
   mount_not_found:
     "Google Driveのマウントが見つかりません。Google Drive for Desktopが起動しているか確認してください",
+  shared_drive_not_synced:
+    "共有ドライブ「{drive}」はこのパソコンに同期されていません。Google Drive の設定 →「共有ドライブを管理」で同期対象に追加するか、同期されている場所にショートカットを追加してください。",
   path_missing:
-    "このアイテムはパソコンのGoogle Driveフォルダにまだ存在しないため開けません。作成・同期の直後なら、少し待ってからもう一度お試しください。他のユーザーから共有されたアイテムの場合は、右クリック →「整理」→「ショートカットを追加」でマイドライブに追加すると開けるようになります。",
+    "このアイテムはパソコンのGoogle Driveフォルダにまだ存在しないため開けません。作成・同期の直後なら、少し待ってからもう一度お試しください。",
   invalid_path: "安全のため、このアイテムのパスは開きませんでした(拡張機能の内部エラー)",
   reveal_failed: "ファイルマネージャーを起動できませんでした",
   bad_request: "拡張機能の内部エラーが発生しました",
@@ -25,6 +27,7 @@ const ERROR_MESSAGES = {
 // notifications are suppressed (focus assist, disabled permission, ...).
 const BADGE_CODES = {
   not_synced: "SYNC",
+  shared_drive_not_synced: "SDRV",
   db_not_found: "DB",
   mount_not_found: "MNT",
   path_missing: "PATH",
@@ -157,7 +160,10 @@ chrome.action.onClicked.addListener(async (tab) => {
     const response = await sendToHost(request);
     logToHost({ ...debug, step: "done", request, response });
     if (!response.ok) {
-      const baseMessage = ERROR_MESSAGES[response.error] ?? `エラー: ${response.error}`;
+      const baseMessage = (ERROR_MESSAGES[response.error] ?? `エラー: ${response.error}`).replace(
+        "{drive}",
+        response.drive ?? ""
+      );
       const message = response.path
         ? `${baseMessage}\n(探した場所: ${response.path})`
         : baseMessage;

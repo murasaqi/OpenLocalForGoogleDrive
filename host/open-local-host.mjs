@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { encodeMessage, readMessage } from "./lib/framing.mjs";
 import { detectMountRoot } from "./lib/mount.mjs";
+import { decideOpen } from "./lib/open-outcome.mjs";
 import {
   defaultDriveFsRoot,
   listAccountDbPaths,
@@ -132,12 +133,8 @@ const handleOpen = (request) => {
   if (dbPaths.length === 0) return { ok: false, error: "db_not_found" };
 
   const fromDb = resolveItemPath(request.itemId, { dbPaths });
-  const resolved =
-    fromDb && fromDb.exists
-      ? fromDb
-      : resolveBreadcrumbPath(request.breadcrumbs) ?? fromDb;
-  if (!resolved) return { ok: false, error: "not_synced" };
-  return openResolved(resolved, request.dryRun);
+  const outcome = decideOpen(fromDb, () => resolveBreadcrumbPath(request.breadcrumbs));
+  return outcome.response ?? openResolved(outcome.resolved, request.dryRun);
 };
 
 const handleRequest = async (request) => {
