@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { encodeMessage, readMessage } from "./lib/framing.mjs";
 import { detectMountRoot } from "./lib/mount.mjs";
+import { decideOpen } from "./lib/open-outcome.mjs";
 import {
   defaultDriveFsRoot,
   listAccountDbPaths,
@@ -14,9 +15,11 @@ import {
 } from "./lib/resolver.mjs";
 
 const EXPLORER_EXE = path.join(process.env.SystemRoot ?? "C:\\Windows", "explorer.exe");
+const OPEN_EXE = "/usr/bin/open";
 const LOG_PATH = path.join(tmpdir(), "open-local-gdrive-host.log");
 
-// Local diagnostics only; the file lives in the user's %TEMP%.
+// Local diagnostics only; the file lives in the user's temp dir
+// (%TEMP% on Windows, $TMPDIR on macOS).
 const logLine = (kind, data) => {
   try {
     appendFileSync(
@@ -29,6 +32,7 @@ const logLine = (kind, data) => {
 };
 
 const EXPLORER_EXIT_WAIT_MS = 3000;
+const FINDER_EXIT_WAIT_MS = 5000;
 
 // Explorer parses its raw command line, so build it verbatim. Windows file
 // names cannot contain double quotes, which makes this quoting injection-safe.
@@ -37,7 +41,7 @@ const EXPLORER_EXIT_WAIT_MS = 3000;
 // (~400ms). Chrome may kill our process tree as soon as the host exits, so
 // wait for that delegation to finish before we respond. Resolves to whether
 // the launch is believed to have succeeded.
-const openInExplorer = (targetPath, selectFile) =>
+const openWithExplorer = (targetPath, selectFile) =>
   new Promise((resolve) => {
     const arg = selectFile ? `/select,"${targetPath}"` : `"${targetPath}"`;
     let child;
@@ -65,6 +69,37 @@ const openInExplorer = (targetPath, selectFile) =>
     });
   });
 
+// `open` takes a normal argv (no raw-command-line quoting to worry about)
+// and, unlike explorer.exe, its exit code is meaningful.
+const openWithFinder = (targetPath, selectFile) =>
+  new Promise((resolve) => {
+    const args = selectFile ? ["-R", targetPath] : [targetPath];
+    let child;
+    try {
+      child = spawn(OPEN_EXE, args, { stdio: "ignore" });
+    } catch {
+      resolve(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      child.unref();
+      resolve(true);
+    }, FINDER_EXIT_WAIT_MS);
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+    child.on("exit", (code) => {
+      clearTimeout(timer);
+      resolve(code === 0);
+    });
+  });
+
+const openInFileManager = (targetPath, selectFile) =>
+  process.platform === "darwin"
+    ? openWithFinder(targetPath, selectFile)
+    : openWithExplorer(targetPath, selectFile);
+
 // A resolved path must stay inside its mount root (path.join already
 // normalized any ".." segments, so reject anything that escapes).
 const isContained = (resolved) => {
@@ -77,8 +112,8 @@ const openResolved = async (resolved, dryRun) => {
   if (!resolved.exists) return { ok: false, error: "path_missing", path: resolved.path };
   const selectFile = !resolved.isFolder;
   if (!dryRun) {
-    const launched = await openInExplorer(resolved.path, selectFile);
-    if (!launched) return { ok: false, error: "explorer_failed", path: resolved.path };
+    const launched = await openInFileManager(resolved.path, selectFile);
+    if (!launched) return { ok: false, error: "reveal_failed", path: resolved.path };
   }
   return { ok: true, path: resolved.path, selected: selectFile };
 };
@@ -98,12 +133,8 @@ const handleOpen = (request) => {
   if (dbPaths.length === 0) return { ok: false, error: "db_not_found" };
 
   const fromDb = resolveItemPath(request.itemId, { dbPaths });
-  const resolved =
-    fromDb && fromDb.exists
-      ? fromDb
-      : resolveBreadcrumbPath(request.breadcrumbs) ?? fromDb;
-  if (!resolved) return { ok: false, error: "not_synced" };
-  return openResolved(resolved, request.dryRun);
+  const outcome = decideOpen(fromDb, () => resolveBreadcrumbPath(request.breadcrumbs));
+  return outcome.response ?? openResolved(outcome.resolved, request.dryRun);
 };
 
 const handleRequest = async (request) => {

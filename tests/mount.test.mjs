@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { mountRootsForAccount, normalizeMountValue } from "../host/lib/mount.mjs";
+import { mountRootsForAccount, normalizeMountValue } from "../host/lib/mount.win.mjs";
 
 test("normalizeMountValue handles registry value shapes", () => {
   assert.equal(normalizeMountValue("G"), "G:\\");

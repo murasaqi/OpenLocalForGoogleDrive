@@ -10,26 +10,29 @@ const ERROR_MESSAGES = {
   db_not_found:
     "Google Drive for Desktopのデータが見つかりません。インストール・起動されているか確認してください",
   mount_not_found:
-    "Google Driveのマウントドライブ(例: G:)が見つかりません。Google Drive for Desktopが起動しているか確認してください",
+    "Google Driveのマウントが見つかりません。Google Drive for Desktopが起動しているか確認してください",
+  shared_drive_not_synced:
+    "共有ドライブ「{drive}」はこのパソコンに同期されていません。Google Drive の設定 →「共有ドライブを管理」で同期対象に追加するか、同期されている場所にショートカットを追加してください。",
   path_missing:
-    "このアイテムはパソコンのGoogle Driveフォルダにまだ存在しないため開けません。作成・同期の直後なら、少し待ってからもう一度お試しください。他のユーザーから共有されたアイテムの場合は、右クリック →「整理」→「ショートカットを追加」でマイドライブに追加すると開けるようになります。",
+    "このアイテムはパソコンのGoogle Driveフォルダにまだ存在しないため開けません。作成・同期の直後なら、少し待ってからもう一度お試しください。",
   invalid_path: "安全のため、このアイテムのパスは開きませんでした(拡張機能の内部エラー)",
-  explorer_failed: "エクスプローラーを起動できませんでした",
+  reveal_failed: "ファイルマネージャーを起動できませんでした",
   bad_request: "拡張機能の内部エラーが発生しました",
   internal: "拡張機能の内部エラーが発生しました",
   host_unreachable:
-    "ローカル連携プログラムに接続できません。リポジトリの scripts\\install.ps1 を実行し、Chromeを再起動してください",
+    "ローカル連携プログラムに接続できません。リポジトリのREADMEに従ってセットアップスクリプトを実行し、Chromeを再起動してください",
 };
 
 // Short badge codes so failures are identifiable even when OS
 // notifications are suppressed (focus assist, disabled permission, ...).
 const BADGE_CODES = {
   not_synced: "SYNC",
+  shared_drive_not_synced: "SDRV",
   db_not_found: "DB",
   mount_not_found: "MNT",
   path_missing: "PATH",
   invalid_path: "INV",
-  explorer_failed: "EXPL",
+  reveal_failed: "REVL",
   bad_request: "REQ",
   internal: "INT",
   host_unreachable: "HOST",
@@ -107,7 +110,7 @@ const parseEffectiveUrl = (tabUrl, context) => {
   return parseDriveUrl(context?.href ?? "");
 };
 
-// Fire-and-forget diagnostics into the host's %TEMP% log file.
+// Fire-and-forget diagnostics into the host's temp-dir log file.
 const logToHost = (data) => {
   try {
     chrome.runtime.sendNativeMessage(HOST_NAME, { action: "log", data }, () => {
@@ -157,7 +160,10 @@ chrome.action.onClicked.addListener(async (tab) => {
     const response = await sendToHost(request);
     logToHost({ ...debug, step: "done", request, response });
     if (!response.ok) {
-      const baseMessage = ERROR_MESSAGES[response.error] ?? `エラー: ${response.error}`;
+      const baseMessage = (ERROR_MESSAGES[response.error] ?? `エラー: ${response.error}`).replace(
+        "{drive}",
+        response.drive ?? ""
+      );
       const message = response.path
         ? `${baseMessage}\n(探した場所: ${response.path})`
         : baseMessage;
